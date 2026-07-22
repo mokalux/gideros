@@ -64,8 +64,8 @@
 				<append>
 					<orig>//TAG-DEPENDENCIES//</orig>								
 					<by>
-        implementation 'com.android.billingclient:billing:7.0.0'
-		implementation 'androidx.annotation:annotation:1.1.0'
+        implementation 'com.android.billingclient:billing:9.1.0'
+		implementation 'androidx.annotation:annotation:1.10.0'
 					</by>
 				</append>
 			</replacelist>			

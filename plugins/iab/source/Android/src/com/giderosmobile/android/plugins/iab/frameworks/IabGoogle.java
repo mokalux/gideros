@@ -19,16 +19,15 @@ import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.BillingResult;
 import com.android.billingclient.api.ConsumeParams;
 import com.android.billingclient.api.ConsumeResponseListener;
+import com.android.billingclient.api.PendingPurchasesParams;
 import com.android.billingclient.api.ProductDetails;
 import com.android.billingclient.api.ProductDetailsResponseListener;
 import com.android.billingclient.api.Purchase;
 import com.android.billingclient.api.PurchasesResponseListener;
 import com.android.billingclient.api.PurchasesUpdatedListener;
 import com.android.billingclient.api.QueryProductDetailsParams;
+import com.android.billingclient.api.QueryProductDetailsResult;
 import com.android.billingclient.api.QueryPurchasesParams;
-import com.android.billingclient.api.SkuDetails;
-import com.android.billingclient.api.SkuDetailsParams;
-import com.android.billingclient.api.SkuDetailsResponseListener;
 import com.giderosmobile.android.plugins.iab.Iab;
 import com.giderosmobile.android.plugins.iab.IabInterface;
 
@@ -47,12 +46,10 @@ public class IabGoogle implements IabInterface, PurchasesUpdatedListener {
 	int sdkAvailable = -1;
 
 	public static Boolean isInstalled(){
-		if(Iab.isPackageInstalled("com.android.vending") || 
-			Iab.isPackageInstalled("com.google.vending") ||
-			Iab.isPackageInstalled("com.google.market"))
-			return true;
-		return false;
-	}
+        return Iab.isPackageInstalled("com.android.vending") ||
+                Iab.isPackageInstalled("com.google.vending") ||
+                Iab.isPackageInstalled("com.google.market");
+    }
 
 	@Override
 	public void onCreate(WeakReference<Activity> activity) {
@@ -75,10 +72,14 @@ public class IabGoogle implements IabInterface, PurchasesUpdatedListener {
 
 	@Override
 	public void init(Object parameters) {
-		billingClient = BillingClient.newBuilder(sActivity.get()).enablePendingPurchases().setListener(this).build();
+		billingClient = BillingClient.newBuilder(sActivity.get())
+				.enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
+				.enableAutoServiceReconnection()
+				.setListener(this)
+				.build();
 		billingClient.startConnection(new BillingClientStateListener() {
 			@Override
-			public void onBillingSetupFinished(BillingResult result) {
+			public void onBillingSetupFinished(@NonNull BillingResult result) {
 				if (result.getResponseCode()==BillingClient.BillingResponseCode.OK)
 					sdkAvailable = 1;
 				else
@@ -132,7 +133,7 @@ public class IabGoogle implements IabInterface, PurchasesUpdatedListener {
 				billingClient.queryProductDetailsAsync(QueryProductDetailsParams.newBuilder().setProductList(skuList).build(),
 						new ProductDetailsResponseListener() {
 							@Override
-							public void onProductDetailsResponse(@NonNull BillingResult result, @Nullable List<ProductDetails> list) {
+							public void onProductDetailsResponse(@NonNull BillingResult result, @Nullable QueryProductDetailsResult res) {
 								if (result.getResponseCode()!=BillingClient.BillingResponseCode.OK) {
 									Iab.productsError(this, result.getDebugMessage());
 									return;
@@ -143,8 +144,9 @@ public class IabGoogle implements IabInterface, PurchasesUpdatedListener {
 									return;
 								}
 								Map<String, ProductDetails> inv=new HashMap<String, ProductDetails>();
-								for (ProductDetails s:list)
-									inv.put(s.getProductId(),s);
+								if (res!=null)
+									for (ProductDetails s:res.getProductDetailsList())
+										inv.put(s.getProductId(),s);
 								inventory=inv;
 								SparseArray<Bundle> arr = new SparseArray<Bundle>();
 								Enumeration<String> e = products.keys();
@@ -219,48 +221,46 @@ public class IabGoogle implements IabInterface, PurchasesUpdatedListener {
 						Iab.restoreError(this, "Request Failed");
 					}
 					else {
-						if (plist!=null) {
-							for (final Purchase info:plist) {
-								if (info.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-									if (Iab.isConsumable(getSku(info), this)) {
-										try {
-											billingClient.consumeAsync(ConsumeParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new ConsumeResponseListener() {
-												@Override
-												public void onConsumeResponse(@NonNull BillingResult result, @NonNull String s) {
-													if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-														Iab.purchaseComplete(this, getSku(info), info.getOrderId());
-													} else {
-														Iab.purchaseError(this, result.getDebugMessage());
-													}
-												}
-											});
-										} catch (Exception e2) {
+                        for (final Purchase info : plist) {
+                            if (info.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
+                                if (Iab.isConsumable(getSku(info), this)) {
+                                    try {
+                                        billingClient.consumeAsync(ConsumeParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new ConsumeResponseListener() {
+                                            @Override
+                                            public void onConsumeResponse(@NonNull BillingResult result, @NonNull String s) {
+                                                if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+                                                    Iab.purchaseComplete(this, getSku(info), info.getOrderId());
+                                                } else {
+                                                    Iab.purchaseError(this, result.getDebugMessage());
+                                                }
+                                            }
+                                        });
+                                    } catch (Exception ignored) {
 
-										}
-									} else {
-										if (info.isAcknowledged())
-											Iab.purchaseComplete(this, getSku(info), info.getOrderId());
-										else
-											billingClient.acknowledgePurchase(AcknowledgePurchaseParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new AcknowledgePurchaseResponseListener() {
-												@Override
-												public void onAcknowledgePurchaseResponse(@NonNull BillingResult result) {
-													if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-														Iab.purchaseComplete(this, getSku(info), info.getOrderId());
-													} else {
-														Iab.purchaseError(this, result.getDebugMessage());
-													}
-												}
-											});
-									}
-								}
-							}
-							Iab.restoreComplete(this);
-						}
-					}
+                                    }
+                                } else {
+                                    if (info.isAcknowledged())
+                                        Iab.purchaseComplete(this, getSku(info), info.getOrderId());
+                                    else
+                                        billingClient.acknowledgePurchase(AcknowledgePurchaseParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new AcknowledgePurchaseResponseListener() {
+                                            @Override
+                                            public void onAcknowledgePurchaseResponse(@NonNull BillingResult result) {
+                                                if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+                                                    Iab.purchaseComplete(this, getSku(info), info.getOrderId());
+                                                } else {
+                                                    Iab.purchaseError(this, result.getDebugMessage());
+                                                }
+                                            }
+                                        });
+                                }
+                            }
+                        }
+                        Iab.restoreComplete(this);
+                    }
 				}
 			});
 		}
-		catch (Exception e2) {
+		catch (Exception ignored) {
 		}
 	}
 
@@ -270,44 +270,45 @@ public class IabGoogle implements IabInterface, PurchasesUpdatedListener {
 			Iab.purchaseError(this, result.getDebugMessage());
 			return;
 		}
-		for (final Purchase info:list) {
-			if (purchasing.contains(getSku(info))) {
-				if (info.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-					if (Iab.isConsumable(getSku(info), this)) {
-						try {
-							billingClient.consumeAsync(ConsumeParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new ConsumeResponseListener() {
-								@Override
-								public void onConsumeResponse(@NonNull BillingResult result, @NonNull String s) {
-									if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-										Iab.purchaseComplete(this, getSku(info), info.getOrderId());
-									} else {
-										Iab.purchaseError(this, result.getDebugMessage());
+		if (list!=null)
+			for (final Purchase info:list) {
+				if (purchasing.contains(getSku(info))) {
+					if (info.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
+						if (Iab.isConsumable(getSku(info), this)) {
+							try {
+								billingClient.consumeAsync(ConsumeParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new ConsumeResponseListener() {
+									@Override
+									public void onConsumeResponse(@NonNull BillingResult result, @NonNull String s) {
+										if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+											Iab.purchaseComplete(this, getSku(info), info.getOrderId());
+										} else {
+											Iab.purchaseError(this, result.getDebugMessage());
+										}
 									}
-								}
-							});
-						} catch (Exception e2) {
-
+								});
+							} catch (Exception ignored) {
+	
+							}
+						} else {
+							if (info.isAcknowledged())
+								Iab.purchaseComplete(this, getSku(info), info.getOrderId());
+							else
+								billingClient.acknowledgePurchase(AcknowledgePurchaseParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new AcknowledgePurchaseResponseListener() {
+									@Override
+									public void onAcknowledgePurchaseResponse(@NonNull BillingResult result) {
+										if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+											Iab.purchaseComplete(this, getSku(info), info.getOrderId());
+										} else {
+											Iab.purchaseError(this, result.getDebugMessage());
+										}
+									}
+								});
 						}
-					} else {
-						if (info.isAcknowledged())
-							Iab.purchaseComplete(this, getSku(info), info.getOrderId());
-						else
-							billingClient.acknowledgePurchase(AcknowledgePurchaseParams.newBuilder().setPurchaseToken(info.getPurchaseToken()).build(), new AcknowledgePurchaseResponseListener() {
-								@Override
-								public void onAcknowledgePurchaseResponse(@NonNull BillingResult result) {
-									if (result.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-										Iab.purchaseComplete(this, getSku(info), info.getOrderId());
-									} else {
-										Iab.purchaseError(this, result.getDebugMessage());
-									}
-								}
-							});
 					}
 				}
-			}
-			else {
-				Iab.purchaseError(this, "PENDING");
-			}
+				else {
+					Iab.purchaseError(this, "PENDING");
+				}
 		}
 		purchasing.clear();
 	}

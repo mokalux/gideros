@@ -1,19 +1,19 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
     repositories {
-        jcenter()
+        mavenCentral()
         google()
         //TAG-TOP-GRADLE-BUILDREPOS//
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.11.1'
+        classpath 'com.android.tools.build:gradle:9.3.0'
         //TAG-CLASSPATH-DEPENDENCIES//
     }
 }
 
 allprojects {
     repositories {
-        jcenter()
+        mavenCentral()
         //TAG-TOP-GRADLE-ALLREPOS//
     }
 }

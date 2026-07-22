@@ -1,8 +1,17 @@
 apply plugin: 'com.android.application'
 //TAG-APP-GRADLE-PLUGIN//
+
+base {
+    archivesName="AndroidTemplate_" + (new Date().format('yyyyMMdd-hhmmss')) + "_${android.defaultConfig.versionCode}"
+}
+
 android {
     compileSdk 23
     namespace "com.giderosmobile.androidtemplate"
+    
+     buildFeatures {
+        buildConfig = true
+    }
     
     defaultConfig {
         applicationId "com.giderosmobile.androidtemplate"
@@ -12,7 +21,6 @@ android {
             abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
         }
 	    versionCode 1
-    	setProperty("archivesBaseName", "AndroidTemplate_" + (new Date().format('yyyyMMdd-hhmmss')) + "_" + versionCode)
     	multiDexEnabled true
     }
     
@@ -28,7 +36,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.txt'
             //signingConfig signingConfigs.release
         }
     }
