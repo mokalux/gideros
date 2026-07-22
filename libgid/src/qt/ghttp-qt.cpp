@@ -52,8 +52,8 @@ g_id HTTPManager::Get(const char *url, const ghttp_Header *header, bool streamin
     if (sslErrorsIgnore)
     	reply->ignoreSslErrors();
 
-    connect(reply, SIGNAL(downloadProgress(qint64, qint64)),
-            this,	 SLOT(downloadProgress(qint64, qint64)));
+    connect(reply, SIGNAL(downloadProgress(qint64,qint64)),
+            this,	 SLOT(downloadProgress(qint64,qint64)));
 
     NetworkReply reply2;
     reply2.id = g_NextId();
@@ -61,6 +61,8 @@ g_id HTTPManager::Get(const char *url, const ghttp_Header *header, bool streamin
     reply2.udata = udata;
     reply2.streaming=streaming;
     reply2.started=false;
+    reply2.inflight=0;
+    reply2.inflightMax=1<<20;
     map_[reply] = reply2;
 
     return reply2.id;
@@ -81,8 +83,8 @@ g_id HTTPManager::Post(const char *url, const ghttp_Header *header, const void *
     if (sslErrorsIgnore)
     	reply->ignoreSslErrors();
 
-    connect(reply, SIGNAL(downloadProgress(qint64, qint64)),
-            this,	 SLOT(downloadProgress(qint64, qint64)));
+    connect(reply, SIGNAL(downloadProgress(qint64,qint64)),
+            this,	 SLOT(downloadProgress(qint64,qint64)));
 
     NetworkReply reply2;
     reply2.id = g_NextId();
@@ -90,6 +92,8 @@ g_id HTTPManager::Post(const char *url, const ghttp_Header *header, const void *
     reply2.udata = udata;
     reply2.streaming=streaming;
     reply2.started=false;
+    reply2.inflight=0;
+    reply2.inflightMax=1<<20;
     map_[reply] = reply2;
 
     return reply2.id;
@@ -109,8 +113,8 @@ g_id HTTPManager::Delete(const char *url, const ghttp_Header *header, bool strea
     if (sslErrorsIgnore)
     	reply->ignoreSslErrors();
 
-    connect(reply, SIGNAL(downloadProgress(qint64, qint64)),
-            this,	 SLOT(downloadProgress(qint64, qint64)));
+    connect(reply, SIGNAL(downloadProgress(qint64,qint64)),
+            this,	 SLOT(downloadProgress(qint64,qint64)));
 
     NetworkReply reply2;
     reply2.id = g_NextId();
@@ -118,6 +122,8 @@ g_id HTTPManager::Delete(const char *url, const ghttp_Header *header, bool strea
     reply2.udata = udata;
     reply2.streaming=streaming;
     reply2.started=false;
+    reply2.inflight=0;
+    reply2.inflightMax=1<<20;
     map_[reply] = reply2;
 
     return reply2.id;
@@ -137,8 +143,8 @@ g_id HTTPManager::Put(const char *url, const ghttp_Header *header, const void *d
     if (sslErrorsIgnore)
     	reply->ignoreSslErrors();
 
-    connect(reply, SIGNAL(downloadProgress(qint64, qint64)),
-            this,	 SLOT(downloadProgress(qint64, qint64)));
+    connect(reply, SIGNAL(downloadProgress(qint64,qint64)),
+            this,	 SLOT(downloadProgress(qint64,qint64)));
 
     NetworkReply reply2;
     reply2.id = g_NextId();
@@ -146,9 +152,41 @@ g_id HTTPManager::Put(const char *url, const ghttp_Header *header, const void *d
     reply2.udata = udata;
     reply2.streaming=streaming;
     reply2.started=false;
+    reply2.inflight=0;
+    reply2.inflightMax=1<<20;
     map_[reply] = reply2;
 
     return reply2.id;
+}
+
+void HTTPManager::StreamAdvanced(g_id id,size_t size)
+{
+    std::map<QNetworkReply*, NetworkReply>::iterator iter = map_.begin(), e = map_.end();
+    for (; iter != e; ++iter)
+    {
+        if (iter->second.id == id)
+        {
+            auto &reply2=iter->second;
+            if (reply2.streaming) {
+                reply2.inflight-=size;
+                if (reply2.inflight<reply2.inflightMax) {
+                    ghttp_ProgressEvent* event=nullptr;
+                    QByteArray bytes = iter->first->readAll();
+                    event = (ghttp_ProgressEvent*)malloc(sizeof(ghttp_ProgressEvent)+ bytes.size());
+                    event->chunk = (char*)event + sizeof(ghttp_ProgressEvent);
+                    memcpy(event->chunk, bytes.constData(), bytes.size());
+                    event->chunkSize = bytes.size();
+                    reply2.inflight+=event->chunkSize;
+                    event->bytesLoaded = reply2.loaded;
+                    event->bytesTotal = reply2.total;
+                    gevent_EnqueueEvent(reply2.id, reply2.callback, GHTTP_PROGRESS_EVENT, event, 1, reply2.udata);
+                }
+            }
+            break;
+        }
+    }
+
+    gevent_RemoveEventsWithGid(id);
 }
 
 void HTTPManager::finished(QNetworkReply *reply)
@@ -234,7 +272,7 @@ void HTTPManager::downloadProgress(qint64 bytesReceived, qint64 bytesTotal)
 
     NetworkReply reply2 = map_[reply];
 
-    ghttp_ProgressEvent* event;
+    ghttp_ProgressEvent* event=nullptr;
     if (reply2.streaming) {
     	if (!reply2.started) {
 			reply2.started=true;
@@ -279,22 +317,29 @@ void HTTPManager::downloadProgress(qint64 bytesReceived, qint64 bytesTotal)
 			event->headers[hdrn].value=NULL;
 
 			gevent_EnqueueEvent(reply2.id, reply2.callback, GHTTP_HEADER_EVENT, event, 1, reply2.udata);
+            event=nullptr;
 		}
-		QByteArray bytes = reply->readAll();
-        event = (ghttp_ProgressEvent*)malloc(sizeof(ghttp_ProgressEvent)+ bytes.size());
-		event->chunk = (char*)event + sizeof(ghttp_ProgressEvent);
-		memcpy(event->chunk, bytes.constData(), bytes.size());
-		event->chunkSize = bytes.size();
+        reply2.loaded=bytesReceived;
+        reply2.total=bytesTotal;
+        if (reply2.inflight<reply2.inflightMax) {
+            QByteArray bytes = reply->readAll();
+            event = (ghttp_ProgressEvent*)malloc(sizeof(ghttp_ProgressEvent)+ bytes.size());
+            event->chunk = (char*)event + sizeof(ghttp_ProgressEvent);
+            memcpy(event->chunk, bytes.constData(), bytes.size());
+            event->chunkSize = bytes.size();
+            reply2.inflight+=event->chunkSize;
+        }
     }
     else {
         event = (ghttp_ProgressEvent*)malloc(sizeof(ghttp_ProgressEvent));
     	event->chunk=NULL;
     	event->chunkSize=0;
     }
-    event->bytesLoaded = bytesReceived;
-    event->bytesTotal = bytesTotal;
-
-    gevent_EnqueueEvent(reply2.id, reply2.callback, GHTTP_PROGRESS_EVENT, event, 1, reply2.udata);
+    if (event) {
+        event->bytesLoaded = bytesReceived;
+        event->bytesTotal = bytesTotal;
+        gevent_EnqueueEvent(reply2.id, reply2.callback, GHTTP_PROGRESS_EVENT, event, 1, reply2.udata);
+    }
 }
 
 static HTTPManager* s_manager = NULL;
@@ -339,6 +384,11 @@ g_id ghttp_Delete(const char* url, const ghttp_Header *header, int streaming, ge
 g_id ghttp_Put(const char* url, const ghttp_Header *header, const void* data, size_t size, int streaming, gevent_Callback callback, void* udata)
 {
     return s_manager->Put(url, header, data, size, streaming, callback, udata);
+}
+
+void ghttp_StreamAdvanced(g_id id,size_t size)
+{
+	return s_manager->StreamAdvanced(id,size);
 }
 
 void ghttp_Close(g_id id)

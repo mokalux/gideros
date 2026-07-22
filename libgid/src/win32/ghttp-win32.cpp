@@ -673,6 +673,11 @@ g_id ghttp_Put(const char* url, const ghttp_Header *header, const void* data, si
   return gid;
 }
 
+void ghttp_StreamAdvanced(g_id id,size_t size)
+{
+	//TODO
+}
+
 void ghttp_Close(g_id gid)
 {
  pthread_mutex_lock (&mutexmap);

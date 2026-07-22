@@ -23,6 +23,7 @@ public:
     g_id Post(const char* url, const ghttp_Header *header, const void* data, size_t size, bool streaming, gevent_Callback callback, void* udata);
     g_id Delete(const char* url, const ghttp_Header *header, bool streaming, gevent_Callback callback, void* udata);
     g_id Put(const char* url, const ghttp_Header *header, const void* data, size_t size, bool streaming, gevent_Callback callback, void* udata);
+    void StreamAdvanced(g_id id,size_t size);
     void Close(g_id id);
     void CloseAll();
 
@@ -40,6 +41,10 @@ private:
         void *udata;
         bool streaming;
         bool started;
+        int inflight;
+        int inflightMax;
+        size_t loaded;
+        size_t total;
     };
     std::map<QNetworkReply*, NetworkReply> map_;
 };

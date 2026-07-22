@@ -407,6 +407,11 @@ g_id ghttp_Put(const char* url, const ghttp_Header *header, const void* data, si
 	return HTTPManager::s_manager->Put(url, header, data, size, streaming, callback, udata);
 }
 
+void ghttp_StreamAdvanced(g_id id,size_t size)
+{
+	//TODO
+}
+
 void ghttp_Close(g_id id)
 {
 	HTTPManager::s_manager->Close(id);

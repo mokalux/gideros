@@ -255,6 +255,12 @@ private:
         lua_call(L, 2, 0);
 
         lua_pop(L, 2);
+
+        if (type == GHTTP_PROGRESS_EVENT) {
+            ghttp_ProgressEvent* d = (ghttp_ProgressEvent*)data;
+            ghttp_StreamAdvanced(id_,d->chunkSize);
+        }
+
     }
 
 private:

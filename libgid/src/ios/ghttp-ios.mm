@@ -273,6 +273,11 @@ g_id ghttp_Delete(const char *url, const ghttp_Header *header, int streaming, ge
     return [s_manager request:url:@"DELETE":header:NULL:0:streaming:callback:udata];
 }
 
+void ghttp_StreamAdvanced(g_id id,size_t size)
+{
+	//TODO
+}
+
 void ghttp_Close(g_id id)
 {
 	[s_manager close:id];

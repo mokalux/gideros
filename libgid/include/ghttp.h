@@ -51,6 +51,7 @@ G_API g_id ghttp_Get(const char *url, const ghttp_Header *headers, int streaming
 G_API g_id ghttp_Post(const char *url, const ghttp_Header *headers, const void *data, size_t size, int streaming, gevent_Callback callback, void *udata);
 G_API g_id ghttp_Delete(const char *url, const ghttp_Header *headers, int streaming, gevent_Callback callback, void *udata);
 G_API g_id ghttp_Put(const char *url, const ghttp_Header *headers, const void *data, size_t size, int streaming, gevent_Callback callback, void *udata);
+G_API void ghttp_StreamAdvanced(g_id id,size_t size);
 G_API void ghttp_Close(g_id id);
 G_API void ghttp_CloseAll();
 
