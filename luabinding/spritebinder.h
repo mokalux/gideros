@@ -64,6 +64,7 @@ private:
 
 	static int setPosition(lua_State* L);
 	static int getPosition(lua_State* L);
+	static int getPositionVector(lua_State* L);
 
     static int setAnchorPosition(lua_State* L);
     static int getAnchorPosition(lua_State* L);
@@ -141,6 +142,14 @@ public:
     static size_t tokenFill;
     static size_t tokenWidth;
     static size_t tokenHeight;
+    static size_t tokenGhostModel;
+    static size_t tokenGhostTransform;
+    static size_t tokenGhostGridX;
+    static size_t tokenGhostGridY;
+    static size_t tokenGhostGridLocation;
+    static size_t tokenGhostChildren;
+    static size_t tokenGhostColor;
+    static size_t tokenGhostText;
     static int updateStyle(lua_State* L);
 };
 

@@ -465,13 +465,13 @@ int TextFieldBinder::__parseGhosts(lua_State* L)
     TextFieldBase* model = static_cast<TextFieldBase*>(binder.getInstance("TextField", 2));
     GhostTextFieldBase *ghost=new GhostTextFieldBase(model);
     //Text
-    lua_rawgetfield(L,1,"text");
+    lua_rawgettoken(L,1,SpriteBinder::tokenGhostText);
     const char *str=lua_tostring(L,-1);
     if (str!=NULL)
         ghost->text=std::string(str);
     lua_pop(L,1);
     //Color
-    lua_rawgetfield(L,1,"color");
+    lua_rawgettoken(L,1,SpriteBinder::tokenGhostColor);
     if (lua_isnoneornil(L,-1))
         ghost->hasColor=false;
     else {

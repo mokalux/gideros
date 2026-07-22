@@ -482,7 +482,7 @@ int PixelBinder::__parseGhosts(lua_State* L)
     Pixel* model = static_cast<Pixel*>(binder.getInstanceOfType("Pixel", GREFERENCED_TYPEMAP_PIXEL, 2));
     GhostPixel *ghost=new GhostPixel(model);
     //Color
-    lua_rawgetfield(L,1,"color");
+    lua_rawgettoken(L,1,SpriteBinder::tokenGhostColor);
     if (lua_isnoneornil(L,-1))
         ghost->hasColor=false;
     else {

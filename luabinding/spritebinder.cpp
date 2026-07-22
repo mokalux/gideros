@@ -16,6 +16,14 @@ size_t SpriteBinder::tokenInsets;
 size_t SpriteBinder::tokenFill;
 size_t SpriteBinder::tokenWidth;
 size_t SpriteBinder::tokenHeight;
+size_t SpriteBinder::tokenGhostModel;
+size_t SpriteBinder::tokenGhostTransform;
+size_t SpriteBinder::tokenGhostGridX;
+size_t SpriteBinder::tokenGhostGridY;
+size_t SpriteBinder::tokenGhostGridLocation;
+size_t SpriteBinder::tokenGhostChildren;
+size_t SpriteBinder::tokenGhostColor;
+size_t SpriteBinder::tokenGhostText;
 
 #define FKEY(n) (STRKEY_LAYOUT_##n)
 #define FSKEY(n) (#n)
@@ -71,6 +79,7 @@ SpriteBinder::SpriteBinder(lua_State* L)
         {"setSkewY", SpriteBinder::setSkewY},
 		{"setPosition", SpriteBinder::setPosition},
 		{"getPosition", SpriteBinder::getPosition},
+		{"getPositionVector", SpriteBinder::getPositionVector},
         {"setAnchorPosition", SpriteBinder::setAnchorPosition},
         {"getAnchorPosition", SpriteBinder::getAnchorPosition},
         {"setAnchorPoint", SpriteBinder::setAnchorPoint},
@@ -331,6 +340,15 @@ SpriteBinder::SpriteBinder(lua_State* L)
     tokenFill=lua_newtoken(L,"fill");
     tokenWidth=lua_newtoken(L,"width");
     tokenHeight=lua_newtoken(L,"height");
+    //For ghosts
+    tokenGhostModel=lua_newtoken(L,"model");
+    tokenGhostTransform=lua_newtoken(L,"transform");
+    tokenGhostGridX=lua_newtoken(L,"gridx");
+    tokenGhostGridY=lua_newtoken(L,"gridy");
+    tokenGhostGridLocation=lua_newtoken(L,"gridLocation");
+    tokenGhostChildren=lua_newtoken(L,"children");
+    tokenGhostColor=lua_newtoken(L,"color");
+    tokenGhostText=lua_newtoken(L,"text");
 }
 
 int SpriteBinder::create(lua_State* L)
@@ -1469,6 +1487,18 @@ int SpriteBinder::getPosition(lua_State* L)
 	lua_pushnumber(L, sprite->z());
 
 	return 3;
+}
+
+int SpriteBinder::getPositionVector(lua_State* L)
+{
+	StackChecker checker(L, "SpriteBinder::getPositionVector", 1);
+
+	Binder binder(L);
+    Sprite* sprite = static_cast<Sprite*>(binder.getInstanceOfType("Sprite", GREFERENCED_TYPEMAP_SPRITE, 1));
+
+	lua_pushvector(L, sprite->x(), sprite->y(), sprite->z());
+
+	return 1;
 }
 
 int SpriteBinder::setAnchorPosition(lua_State* L)
@@ -2818,6 +2848,7 @@ int SpriteBinder::setGhosts(lua_State* L)
 
     Binder binder(L);
     Sprite* sprite = static_cast<Sprite*>(binder.getInstanceOfType("Sprite", GREFERENCED_TYPEMAP_SPRITE, 1));
+    bool hasResolver=lua_isfunction(L,3);
     if (lua_isnoneornil(L,2))
         sprite->setGhosts(nullptr);
     else
@@ -2826,9 +2857,23 @@ int SpriteBinder::setGhosts(lua_State* L)
         int nghosts=lua_objlen(L,2);
         std::vector<GhostSprite *> ghosts;
         for (int i=0;i<nghosts;i++) {
-            lua_rawgeti(L,2,i+1); //T
+        	if (hasResolver)
+        	{
+        		lua_pushvalue(L,3);
+        		lua_rawgeti(L,2,i+1);
+                lua_call(L,1,1);
+        	}
+        	else
+        		lua_rawgeti(L,2,i+1); //T
             luaL_checktype(L,-1,LUA_TTABLE);
-            lua_rawgetfield(L,-1,"model"); //T,M
+            int mtype=lua_gettoken(L,-1,tokenGhostModel); //T,M
+            if (mtype==LUA_TFUNCTION) { //If model is a function, call it to get resulting table
+                lua_insert(L,-2); //M,T
+                lua_pushvalue(L,1); //M,T,P
+                lua_call(L,2,1); //T
+                luaL_checktype(L,-1,LUA_TTABLE);
+                lua_rawgettoken(L,-1,tokenGhostModel); //T,M
+            }
             luaL_checktype(L,-1,LUA_TTABLE);
             lua_getfield(L,-1,"__parseGhosts"); //T,M,F
             luaL_checktype(L,-1,LUA_TFUNCTION);
@@ -2889,22 +2934,32 @@ int SpriteBinder::lookAt(lua_State* L)
 void SpriteBinder::__parseGhost(GhostSprite *g,lua_State* L)
 {
     Binder binder(L);
-    lua_rawgetfield(L,1,"transform");
+    lua_rawgettoken(L,1,tokenGhostTransform);
     if (lua_istable(L,-1)) {
         Transform* matrix = static_cast<Transform*>(binder.getInstance("Matrix", -1));
         g->matrix=new float[16];
         memcpy(g->matrix,matrix->matrix().data(),sizeof(float)*16);
     }
 
-    lua_rawgetfield(L,1,"gridx");
-    int gridx=lua_tonumber(L,-1);
-    lua_rawgetfield(L,1,"gridy");
-    int gridy=lua_tonumber(L,-1);
-    lua_pop(L,2);
+    int gridx,gridy;
+    if (lua_rawgettoken(L,1,tokenGhostGridLocation)==LUA_TVECTOR)
+    {
+    	const float *v=lua_tovector(L,-1);
+    	gridx=v[0];
+    	gridy=v[1];
+		lua_pop(L,1);
+    }
+    else {
+		lua_rawgettoken(L,1,tokenGhostGridX);
+		gridx=lua_tonumber(L,-1);
+		lua_rawgettoken(L,1,tokenGhostGridY);
+		gridy=lua_tonumber(L,-1);
+		lua_pop(L,3);
+    }
     g->gridx=gridx;
     g->gridy=gridy;
     // Children
-    lua_rawgetfield(L,1,"children");
+    lua_rawgettoken(L,1,tokenGhostChildren);
     if (lua_istable(L,-1))
     {
         int nghosts=lua_objlen(L,-1);
