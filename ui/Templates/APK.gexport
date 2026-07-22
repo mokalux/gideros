@@ -168,7 +168,7 @@ local ap=require("Tools/export_android")
 				<replace orig="//signingConfig" by="[[[local.noSigning]]]signingConfig"/>
 				<replace orig="//storeFile" by="[[[local.noSigning]]]storeFile"/>
         		<replace orig="versionCode 1" by="versionCode [[[project.version_code]]]"/>
-        		<replace><orig>setProperty("archivesBaseName"</orig><by>[[[local.noRename]]]setProperty("archivesBaseName"</by></replace>
+        		<replace><orig>archivesName=</orig><by>[[[local.noRename]]]archivesName=</by></replace>
         	</replacelist>		
 		</template>
 		<if condition="[[[eq:[[[sys.exportType]]]:player]]]">
